@@ -78,8 +78,7 @@ char BLUE_BRT = 0;
 char RED_STEP = 1;
 char GREEN_STEP = 2;
 char BLUE_STEP = 3;
-char DIM_Enable = 0;
-
+char DIM_Enable = 1;
 
 /* USER CODE END 0 */
 
@@ -115,14 +114,15 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /*** Configure GPIOs ***/
-  GPIOD->MODER = 0x55555555; // set all Port D pins to outputs
+  GPIOD->MODER = 0x55500000;//55555; // set all Port D pins to outputs
   GPIOA->MODER |= 0x000000FF; // Port A mode register - make A0 to A3 analog pins
+
 
 
   /*** Configure ADC1 ***/
   RCC->APB2ENR |= 1<<8;  // Turn on ADC1 clock by forcing bit 8 to 1 while keeping other bits unchanged
-  ADC1->SMPR2 |= 1; // 15 clock cycles per sample
-  ADC1->CR2 |= 1;        // Turn on ADC1 by forcing bit 0 to 1 while keeping other bits unchanged
+  ADC1->SMPR2  |= 1; 	 // 15 clock cycles per sample
+  ADC1->CR2    |= 1;     // Turn on ADC1 by forcing bit 0 to 1 while keeping other bits unchanged
 
   /*****************************************************************************************************
   These commands are handled as part of the MX_TIM7_Init() function and don't need to be enabled
@@ -131,30 +131,77 @@ int main(void)
   NVIC_EnableIRQ(TIM7_IRQn); // Enable Timer 7 Interrupt in the NVIC controller
   *******************************************************************************************************/
 
-  TIM7->PSC = 199; //40Khz timer clock prescaler value, 40Khz = 16Mhz / 200
-  TIM7->ARR = 1; // Count to 1 then generate interrupt (divide by 2), 20Khz interrupt rate to increment byte counter for 78Hz PWM
+  TIM7->PSC   = 199; //40Khz timer clock prescaler value, 40Khz = 16Mhz / 200
+  TIM7->ARR   = 1; // Count to 1 then generate interrupt (divide by 2), 20Khz interrupt rate to increment byte counter for 78Hz PWM
   TIM7->DIER |= 1; // Enable timer 7 interrupt
-  TIM7->CR1 |= 1; // Enable timer counting
+  TIM7->CR1  |= 1; // Enable timer counting
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int analog_value, switches, cycle = 1;
+  int analog_value, switches, cycle = 1, i = 0;
 
 
   while (1)
   {
-	  switches = GPIOC->IDR & 0xF;
-	  cycle = (cycle+1)%16;
-	  if (cycle > switches)
-	      GPIOD->ODR = 0x0000; // turn off all LEDS
-	    else
-	      GPIOD->ODR = 0xffff; // turn on all LEDS
+	  // use i as control variable for channels in ADC
+	  i = (i + 1) % 3;
 
-	  delay_tenths_ms(1000);
+//	  switches = GPIOC->IDR & 0xF;
+//	  cycle = (cycle+1)%16;
+//	  if (cycle > switches)
+//	      GPIOD->ODR = 0x0000; // turn off all LEDS
+//	    else
+//	      GPIOD->ODR = 0xffff; // turn on all LEDS
 
 
+//	  while (DIM_Enable == 1) {
+//		  if (RED_BRT<= ramp) {
+//			  RED_BRT +=  RED_STEP;
+//			  GPIOD->ODR |= ~(1<<15);
+//			  delay_tenths_ms(100);
+//		  }
+//
+//		  if (BLUE_BRT<= ramp) {
+//			  BLUE_BRT += BLUE_STEP;
+//			  GPIOD->ODR |= ~(1<<14);
+//			  delay_tenths_ms(100);
+//
+//		  }
+//
+//		  if (GREEN_BRT<= ramp) {
+//			  GREEN_BRT += GREEN_STEP;
+//			  GPIOD->ODR |= ~(1<<13);
+//			  delay_tenths_ms(100);
+//		  }
+//
+//		  HAL_Delay(1);
+//		  ramp++;
+//	  }
+
+	  // add one for proper selection of potentiometer
+	  ADC1->SQR3 = i + 1;
+	  // enable conversion
+	  ADC1->CR2 |= 1<<30;
+
+	  // use 8 bits
+	  analog_value = ADC1->DR >> 4;
+
+	  // Red pot
+	  if(i == 0 && ADC1->SR & 1<<1) {
+		  RED_BRT = analog_value;
+	  }
+
+	  // Green pot
+	  if(i == 1 && ADC1->SR & 1<<1) {
+		  GREEN_BRT = analog_value;
+	  }
+
+	  // Blue pot
+	  if(i == 2 && ADC1->SR & 1<<1) {
+		  BLUE_BRT = analog_value;
+	  }
 
     /* USER CODE BEGIN 3 */
   }
